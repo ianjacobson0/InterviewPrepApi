@@ -5,6 +5,7 @@ using ICSharpCode.SharpZipLib.Tar;
 using InterviewPrepApi.DTO;
 using Microsoft.AspNetCore.Components.Server;
 using Newtonsoft.Json;
+using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 
@@ -26,6 +27,7 @@ namespace InterviewPrepApi.Services
 		private async Task<CodeResponseDTO> RunPython(string code)
 		{
 			using var client = new DockerClientConfiguration(new Uri("tcp://host.docker.internal:2375"), defaultTimeout: TimeSpan.FromMinutes(5)).CreateClient();
+			Debug.WriteLine($"code {code}");
 
 			// create files
 			string contextPath = @"./context";
@@ -82,7 +84,8 @@ namespace InterviewPrepApi.Services
 				Image = imageName,
 				Tty = false,
 				AttachStdout = true,
-				AttachStderr = true
+				AttachStderr = true,
+				NetworkDisabled = true
 			};
 			var createResponse = await client.Containers.CreateContainerAsync(createParameters);
 			string containerId = createResponse.ID;
@@ -90,13 +93,22 @@ namespace InterviewPrepApi.Services
 			Debug.WriteLine($"{containerId} started");
 
 			// get container logs
+			ContainerInspectResponse inspectResponse = null;
+			do
+			{
+				inspectResponse = await client.Containers.InspectContainerAsync(containerId);
+				await Task.Delay(100);
+
+			} while (inspectResponse != null && inspectResponse.State.Running == true);
+
 			var logParameters = new ContainerLogsParameters()
 			{
 				ShowStderr = true,
 				ShowStdout = true,
 				Follow = false
 			};
-			var logStream = await client.Containers.GetContainerLogsAsync(containerId, false, logParameters);
+
+			MultiplexedStream logStream = await client.Containers.GetContainerLogsAsync(containerId, false, logParameters);
 			var result = await logStream.ReadOutputToEndAsync(CancellationToken.None);
 			logStream.Dispose();
 			Debug.WriteLine($"{containerId} gathered logs");

@@ -49,6 +49,14 @@ builder.Services.AddSingleton<JwtAuthenticationManager>(provider =>
 // docker
 builder.Services.AddSingleton<CodeRunner>();
 
+// cors
+builder.Services.AddCors(o => o.AddPolicy("allow_all", build =>
+{
+	build.AllowAnyHeader()
+	.AllowAnyOrigin()
+	.AllowAnyMethod();
+}));
+
 // Build
 var app = builder.Build();
 
@@ -64,6 +72,8 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 
 app.UseAuthorization();
+
+app.UseCors("allow_all");
 
 app.MapControllers();
 
