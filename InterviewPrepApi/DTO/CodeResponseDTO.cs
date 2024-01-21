@@ -4,7 +4,7 @@ namespace InterviewPrepApi.DTO
 {
 	public class CodeResponseDTO
 	{
-		public bool Success { get; set; }
+		public bool Correct { get; set; }
 		public string? ErrorMessage { get; set; }
 		public string? StdOut { get; set; }
 		public string? StdErr { get; set; }

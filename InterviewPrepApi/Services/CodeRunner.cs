@@ -2,6 +2,7 @@
 using Docker.DotNet.BasicAuth;
 using Docker.DotNet.Models;
 using ICSharpCode.SharpZipLib.Tar;
+using InterviewPrepApi.Data;
 using InterviewPrepApi.DTO;
 using Microsoft.AspNetCore.Components.Server;
 using Newtonsoft.Json;
@@ -13,21 +14,28 @@ namespace InterviewPrepApi.Services
 {
 	public class CodeRunner
 	{
+
+		private readonly AppDbContext context;
+		public CodeRunner(AppDbContext context)
+		{
+			this.context = context;
+		}
+
 		public async Task<CodeResponseDTO> Run(CodeDTO codeDTO)
 		{
 			switch (codeDTO.Type)
 			{
 				case "python":
-					return await RunPython(codeDTO.Source);
+					return await RunPython(codeDTO.Source, codeDTO.QuestionId);
 				default:
 					return null;
 			}
 		}
 
-		private async Task<CodeResponseDTO> RunPython(string code)
+		private async Task<CodeResponseDTO> RunPython(string code, int questionId)
 		{
 			using var client = new DockerClientConfiguration(new Uri("tcp://host.docker.internal:2375"), defaultTimeout: TimeSpan.FromMinutes(5)).CreateClient();
-			Debug.WriteLine($"code {code}");
+
 
 			// create files
 			string contextPath = @"./context";
@@ -36,7 +44,22 @@ namespace InterviewPrepApi.Services
 			string pythonPath = @"./context/code.py";
 			var codeFile = File.Create(pythonPath);
 			codeFile.Close();
-			File.WriteAllText(pythonPath, code);
+			// add headers and tests to code
+			var sbCode = new StringBuilder();
+			sbCode.AppendLine("import unittest");
+			sbCode.AppendLine("import logging");
+			sbCode.AppendLine("import sys");
+
+			sbCode.AppendLine(code);
+
+			string pythonTest = context.Question.FirstOrDefault(q => q.id == questionId).pythonTests;
+			if (pythonTest == null)
+			{
+				return new CodeResponseDTO { Correct = false, ErrorMessage = "question not found", StdErr = "", StdOut = "" };
+			}
+			sbCode.AppendLine(pythonTest);
+
+			File.WriteAllText(pythonPath, sbCode.ToString());
 
 			string dockerPath = @"./context/Dockerfile";
 			var dockerFile = File.Create(dockerPath);
@@ -121,7 +144,9 @@ namespace InterviewPrepApi.Services
 			await client.Images.DeleteImageAsync(imageName, new ImageDeleteParameters { Force = true});
 			Debug.WriteLine($"{imageName} deleted");
 
-			return new CodeResponseDTO { Success = true, StdOut = result.stdout, StdErr = result.stderr, ErrorMessage = null };
+			if (!string.IsNullOrEmpty(result.stderr) || (!string.IsNullOrEmpty(result.stdout) && result.stdout[0] == 'F'))
+				return new CodeResponseDTO { Correct = false, StdOut = result.stdout, StdErr = result.stderr, ErrorMessage = null };
+			return new CodeResponseDTO { Correct = true, StdOut = result.stdout, StdErr = result.stderr, ErrorMessage = null };
 		}
 		private static Stream CreateTarballForDockerfileDirectory(string directory)
 		{

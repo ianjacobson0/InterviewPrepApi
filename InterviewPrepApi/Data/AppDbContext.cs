@@ -11,5 +11,6 @@ namespace InterviewPrepApi.Data
 		}
 
 		public DbSet<User>? User { get; set; }
+		public DbSet<Question>? Question { get; set; }
 	}
 }

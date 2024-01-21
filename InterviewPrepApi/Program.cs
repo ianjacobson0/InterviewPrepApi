@@ -47,7 +47,7 @@ builder.Services.AddSingleton<JwtAuthenticationManager>(provider =>
 });
 
 // docker
-builder.Services.AddSingleton<CodeRunner>();
+builder.Services.AddScoped<CodeRunner>();
 
 // cors
 builder.Services.AddCors(o => o.AddPolicy("allow_all", build =>
